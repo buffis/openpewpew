@@ -1,64 +1,82 @@
-typedef struct AutofireConfig {
+struct AutofireConfig {
   int frames_active;
   int frames_inactive;
   int input_pin;
   int output_pin;
   int autofire_state;
-}
+};
 
 AutofireConfig button1 = {
   /*frames_active=*/1,
   /*frames_inactive=*/2,
   /*input_pin=*/2,
-  /*frames_active=*/12,
-  /*frames_active=*/0  
+  /*output_pin=*/12,
+  /*autofire_state=*/0  
 };
 
-void setup_pins() {
-  pinMode(2,INPUT_PULLUP);
-  pinMode(12, INPUT_PULLUP);
-  pinMode(13, OUTPUT);
+AutofireConfig button2 = {
+  /*frames_active=*/1,
+  /*frames_inactive=*/2,
+  /*input_pin=*/2,
+  /*output_pin=*/12,
+  /*autofire_state=*/0  
+};
+
+void press_button(int pin) {
+  digitalWrite(pin, LOW);
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
+}
+
+void release_button(int pin) {
   digitalWrite (12, LOW) ;
-  digitalWrite (13, LOW) ;
+  pinMode(12, INPUT_PULLUP);
 }
 
-void setup_timer() {
-  cli();
-  TCCR1A = 0x00;      // Normal mode, => Disconnect Pin OC1  PWM Operation disabled
-  TCCR1B = 0x02;      // 16MHz clock with prescaler, TCNT1 increments every .5 uS (cs11 bit set)
-  TCNT1  = 0;//initialize counter value to 0
-  OCR1A = 33333;   // = 16666 microseconds (each count is .5 us)
-  TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
-  sei();
-}
+void led_on() { digitalWrite (LED_BUILTIN, HIGH); }
+void led_off() { digitalWrite (LED_BUILTIN, LOW); }
 
-void setup() {
-  setup_pins();
-  setup_timer();
-}
-
-ISR(TIMER1_COMPA_vect) {
-  boolean should_fire = !digitalRead(2);
+void handle_button(AutofireConfig* button) {
+  boolean should_fire = !digitalRead(button->input_pin);
   if (should_fire) {
-    if (autofire_state++ < frame_active_button_1) {
-        pinMode(12, OUTPUT);
-        digitalWrite (12, LOW);
-        digitalWrite (13, HIGH);
+    if (button->autofire_state++ < button->frames_active) {
+        press_button(button->output_pin);
+        led_on();
     } else {
-        digitalWrite (12, LOW) ;
-        pinMode(12, INPUT_PULLUP);
-        digitalWrite (13, LOW);
+        release_button(button->output_pin);
+        led_off();
     }
-    if (autofire_state > (frame_active_button_1 + frame_inactive_button_1) {
-      autofire_state = 0;
+    if (button->autofire_state > (button->frames_active + button->frames_inactive)) {
+      button->autofire_state = 0;
     }
   } else {
-    autofire_state = 0;
-    pinMode(12, INPUT_PULLUP);
-    digitalWrite (13, LOW);
+    button->autofire_state = 0;
+    release_button(button->output_pin);
   }
 }
 
-void loop() {
-    delay(10);
+ISR(TIMER1_COMPA_vect) {
+  handle_button(&button1);
+  handle_button(&button2);
 }
+
+void setup() {
+  pinMode(button1.input_pin, INPUT_PULLUP);
+  pinMode(button2.input_pin, INPUT_PULLUP);
+  release_button(button1.output_pin);
+  release_button(button2.output_pin);
+  
+  pinMode(LED_BUILTIN, OUTPUT);
+  led_off();
+
+  // Setup timer.
+  cli();
+  TCCR1A = 0x00; // Timer 1 in normal mode.
+  TCCR1B = 0x02; // 16MHz clock with prescaler, TCNT1 increments every .5 uS (cs11 bit set)
+  TCNT1  = 0; // Initialize counter to 0.
+  OCR1A = 33333; // = 16666 microseconds (each count is .5 us)
+  TIMSK1 |= (1 << OCIE1A); // Timer compare interrupt enabled.
+  sei();
+}
+
+void loop() {}
