@@ -1,81 +1,102 @@
+// OpenPewPew, active autofire using Android Nano
+// buffi - 2019
+//
+
+// Button configs below.
+// Four autofire buttons with different frequencies are allowed.
+// When "input_pin" of a button is connected to GND, "output_pin" will start auto-firing.
+// Each pulse is "frames_active" frames long, with "frames_inactive" frames between each pulse.
+
 struct AutofireConfig {
-  int frames_active;
-  int frames_inactive;
-  int input_pin;
-  int output_pin;
-  int autofire_state;
+  int frames_active, frames_inactive, input_pin, output_pin, autofire_state;
 };
 
-AutofireConfig button1 = {
+AutofireConfig BUTTON_1 = {
   /*frames_active=*/1,
   /*frames_inactive=*/2,
-  /*input_pin=*/2,
-  /*output_pin=*/12,
+  /*input_pin=*/12,
+  /*output_pin=*/11,
   /*autofire_state=*/0  
 };
 
-AutofireConfig button2 = {
-  /*frames_active=*/1,
-  /*frames_inactive=*/2,
-  /*input_pin=*/2,
-  /*output_pin=*/12,
+AutofireConfig BUTTON_2 = {
+  /*frames_active=*/3,
+  /*frames_inactive=*/3,
+  /*input_pin=*/10,
+  /*output_pin=*/9,
   /*autofire_state=*/0  
 };
 
-void press_button(int pin) {
-  digitalWrite(pin, LOW);
-  pinMode(pin, OUTPUT);
-  digitalWrite(pin, LOW);
-}
+AutofireConfig BUTTON_3 = {
+  /*frames_active=*/2,
+  /*frames_inactive=*/2,
+  /*input_pin=*/23,
+  /*output_pin=*/24,
+  /*autofire_state=*/0  
+};
 
-void release_button(int pin) {
-  digitalWrite (12, LOW) ;
-  pinMode(12, INPUT_PULLUP);
-}
+AutofireConfig BUTTON_4 = {
+  /*frames_active=*/2,
+  /*frames_inactive=*/2,
+  /*input_pin=*/25,
+  /*output_pin=*/26,
+  /*autofire_state=*/0  
+};
 
-void led_on() { digitalWrite (LED_BUILTIN, HIGH); }
-void led_off() { digitalWrite (LED_BUILTIN, LOW); }
+AutofireConfig *BUTTONS[] = {&BUTTON_1, &BUTTON_2, &BUTTON_3, &BUTTON_4};
 
-void handle_button(AutofireConfig* button) {
+// Code below.
+boolean handle_button(AutofireConfig* button) {
   boolean should_fire = !digitalRead(button->input_pin);
+  boolean firing = false;
   if (should_fire) {
     if (button->autofire_state++ < button->frames_active) {
-        press_button(button->output_pin);
-        led_on();
+        digitalWrite(button->output_pin, LOW);
+        pinMode(button->output_pin, OUTPUT);
+        digitalWrite(button->output_pin, LOW);
+        firing = true;
     } else {
-        release_button(button->output_pin);
-        led_off();
+        digitalWrite (button->output_pin, LOW) ;
+        pinMode(button->output_pin, INPUT_PULLUP);
     }
     if (button->autofire_state > (button->frames_active + button->frames_inactive)) {
       button->autofire_state = 0;
     }
   } else {
     button->autofire_state = 0;
-    release_button(button->output_pin);
+    digitalWrite (button->output_pin, LOW) ;
+    pinMode(button->output_pin, INPUT_PULLUP);
   }
+  return firing;
 }
 
 ISR(TIMER1_COMPA_vect) {
-  handle_button(&button1);
-  handle_button(&button2);
+  boolean firing = false;
+  for (int i=0; i<4; i++)
+    firing |= handle_button(BUTTONS[i]);
+  if (firing)
+    digitalWrite (LED_BUILTIN, HIGH);
+  else
+    digitalWrite (LED_BUILTIN, LOW);
 }
 
 void setup() {
-  pinMode(button1.input_pin, INPUT_PULLUP);
-  pinMode(button2.input_pin, INPUT_PULLUP);
-  release_button(button1.output_pin);
-  release_button(button2.output_pin);
-  
+  for (int i=0; i<4; i++) {
+    pinMode(BUTTONS[i]->input_pin, INPUT_PULLUP);
+    digitalWrite (BUTTONS[i]->output_pin, LOW) ;
+    pinMode(BUTTONS[i]->output_pin, INPUT_PULLUP);
+  }
+
   pinMode(LED_BUILTIN, OUTPUT);
-  led_off();
+  digitalWrite (LED_BUILTIN, LOW);
 
   // Setup timer.
   cli();
-  TCCR1A = 0x00; // Timer 1 in normal mode.
-  TCCR1B = 0x02; // 16MHz clock with prescaler, TCNT1 increments every .5 uS (cs11 bit set)
-  TCNT1  = 0; // Initialize counter to 0.
+  TCCR1A = 0x00; // Timer 1 in normal mode
+  TCCR1B = 0x02; // 16MHz clock with prescaler, TCNT1 increments every .5 uS
+  TCNT1  = 0;    // Initialize counter to 0
   OCR1A = 33333; // = 16666 microseconds (each count is .5 us)
-  TIMSK1 |= (1 << OCIE1A); // Timer compare interrupt enabled.
+  TIMSK1 |= (1 << OCIE1A); // Enable compare interrupt
   sei();
 }
 
