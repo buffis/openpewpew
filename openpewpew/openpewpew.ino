@@ -1,4 +1,4 @@
-// OpenPewPew, active autofire using Android Nano
+// OpenPewPew, active autofire using Arduino Nano
 // buffi - 2019
 //
 
